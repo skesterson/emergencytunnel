@@ -1,0 +1,48 @@
+#!/usr/bin/env ruby
+
+# Some constants
+LPORT = 54321 # local port
+HOST = "your.friendly.ssh.server" # remote host
+PORT = 22 # remote port
+BUFF = 1024
+
+require 'socket'
+
+def forward(conn)
+  begin
+    dest = TCPSocket.new(HOST, PORT)
+  rescue SystemCallError => ex
+    puts "Unable to get connection to #{HOST}:#{PORT} : #{ex}"
+  end
+
+  loop do
+    blah = select([conn, dest], nil, nil)
+    if blah[0].include?(conn)
+      data = conn.recv(BUFF)
+      break if data.empty?
+      dest.write(data)
+    end
+    if blah[0].include?(dest)
+      data = dest.recv(BUFF)
+      break if data.empty?
+      conn.write(data)
+    end
+  end
+  conn.close
+  dest.close
+end
+
+# Start our listener
+begin
+  listener = TCPServer.open(LPORT)
+rescue SystemCallError => ex
+  puts "Unable to bind to local port #{LPORT} : #{ex}"
+  exit 1
+end
+
+# Run a thread for each client connection
+loop do
+  Thread.start(listener.accept) do |conn|
+    forward(conn)
+  end
+end
